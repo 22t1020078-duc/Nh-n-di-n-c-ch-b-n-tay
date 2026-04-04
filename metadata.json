@@ -1,0 +1,5 @@
+{
+  "name": "Hand Gesture Mouse Control",
+  "description": "A virtual mouse and presentation controller using hand gestures and MediaPipe.",
+  "requestFramePermissions": ["camera"]
+}

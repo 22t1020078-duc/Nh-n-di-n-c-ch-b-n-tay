@@ -1,11 +1,34 @@
-<div align="center">
+# Hand Gesture Mouse Control 🖐️
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A high-performance virtual mouse and presentation controller using hand gestures and MediaPipe.
 
-  <h1>Built with AI Studio</h2>
+## Features
+- **Mouse Control:** Move cursor with index finger, click with pinch.
+- **Presentation:** Swipe left/right to navigate slides.
+- **Laser Pointer:** Virtual laser trail for highlighting content.
+- **Zoom & Pause:** Pinch to zoom, fist to pause.
+- **Real-time Stats:** FPS and confidence monitoring.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Tech Stack
+- **React 18+**
+- **TypeScript**
+- **MediaPipe Hands:** Real-time hand landmark detection.
+- **Tailwind CSS:** Modern, responsive UI.
+- **Motion:** Smooth animations and transitions.
+- **Recharts:** Data visualization for system evaluation.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## How to Run
+1. Install dependencies:
+```bash
+npm install
+```
 
-</div>
+2. Start development server:
+```bash
+npm run dev
+```
+
+## Architecture
+- `src/lib/handTracker.ts`: Wrapper for MediaPipe Hands SDK.
+- `src/lib/gestureLogic.ts`: Heuristic-based gesture recognition.
+- `src/App.tsx`: Main application with routing and UI components.
