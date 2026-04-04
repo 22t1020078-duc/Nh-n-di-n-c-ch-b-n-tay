@@ -52,20 +52,24 @@ const Sidebar = () => {
   
   const menuItems = [
     { path: '/', label: 'Giới thiệu & EDA', icon: Info },
-    { path: '/demo', label: 'Triển khai', icon: Play },
-    { path: '/stats', label: 'Đánh giá', icon: BarChart3 },
+    { path: '/demo', label: 'Triển khai mô hình', icon: Play },
+    { path: '/stats', label: 'Đánh giá hệ thống', icon: BarChart3 },
   ];
 
   return (
-    <div className="w-64 bg-slate-900 text-white h-screen flex flex-col border-r border-slate-800">
-      <div className="p-6 flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-lg">
-          <CircleDot className="w-6 h-6" />
+    <div className="w-[18rem] bg-slate-50 h-screen flex flex-col border-r border-slate-200 shrink-0 overflow-y-auto">
+      <div className="p-8 border-b border-slate-200 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center shadow-lg shadow-red-100">
+            <Zap className="text-white w-6 h-6 fill-current" />
+          </div>
+          <h1 className="text-xl font-black tracking-tighter text-slate-900">GestureAI</h1>
         </div>
-        <h1 className="font-bold text-xl tracking-tight">GestureAI</h1>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">v1.0.0 • Streamlit Mode</p>
       </div>
       
-      <nav className="flex-1 px-4 py-4 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-1">
+        <p className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Navigation</p>
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -74,27 +78,35 @@ const Sidebar = () => {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group font-bold",
                 isActive 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" 
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  ? "bg-red-500 text-white shadow-lg shadow-red-100" 
+                  : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               )}
             >
-              <Icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400 group-hover:text-blue-400")} />
-              <span className="font-medium">{item.label}</span>
+              <Icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400 group-hover:text-slate-600")} />
+              <span>{item.label}</span>
             </Link>
           );
         })}
-      </nav>
-      
-      <div className="p-6 border-t border-slate-800">
-        <div className="bg-slate-800/50 rounded-2xl p-4">
-          <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Trạng thái</p>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-sm font-medium">Hệ thống sẵn sàng</span>
+
+        <div className="pt-8 px-4">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Project Info</p>
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Sinh viên</p>
+              <p className="text-sm font-bold text-slate-700">Nguyễn Công Minh Đức</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">MSSV</p>
+              <p className="text-sm font-bold text-slate-700">22T1020078</p>
+            </div>
           </div>
         </div>
+      </nav>
+      
+      <div className="p-6 text-center border-t border-slate-200">
+        <p className="text-[10px] text-slate-400 font-medium">© 2024 HUSC AI Lab</p>
       </div>
     </div>
   );
@@ -315,6 +327,33 @@ const DemoPage = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [slides, setSlides] = useState<SlideData[]>([]);
   
+  // States for manual input simulation (Streamlit-like widgets)
+  const [modelType, setModelType] = useState('MediaPipe + Custom Logic (.h5)');
+  const [manualInputs, setManualInputs] = useState({
+    thumb_index_dist: 0.15,
+    index_up: 1,
+    middle_up: 0,
+    ring_up: 0,
+    pinky_up: 0
+  });
+
+  const handleManualPredict = () => {
+    // Simulate prediction logic based on manual inputs
+    let pred: GestureType = 'None';
+    let conf = 0.85;
+
+    if (manualInputs.index_up && !manualInputs.middle_up && manualInputs.thumb_index_dist > 0.1) {
+      pred = 'Laser';
+    } else if (manualInputs.index_up && manualInputs.thumb_index_dist < 0.05) {
+      pred = 'Click';
+    } else if (manualInputs.index_up && manualInputs.middle_up && manualInputs.ring_up && manualInputs.pinky_up) {
+      pred = 'Swipe Left'; // Default to Swipe Left for simulation
+    }
+
+    setGesture(pred);
+    setConfidence(conf);
+  };
+  
   useEffect(() => {
     isPresentationModeRef.current = isPresentationMode;
   }, [isPresentationMode]);
@@ -512,236 +551,132 @@ const DemoPage = () => {
   }, [isPresentationMode, isCameraOn]);
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-10 pb-32">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">Triển khai Real-time</h2>
-          <p className="text-slate-500">Bật camera để bắt đầu điều khiển bằng cử chỉ.</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Triển khai mô hình</h2>
+          <p className="text-slate-500 mt-2 text-lg">Môi trường thực thi và kiểm thử hệ thống nhận diện cử chỉ.</p>
         </div>
-        <button
-          onClick={isCameraOn ? stopCamera : startCamera}
-          className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all",
-            isCameraOn 
-              ? "bg-red-100 text-red-600 hover:bg-red-200" 
-              : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
-          )}
-        >
-          <Camera className="w-5 h-5" />
-          {isCameraOn ? "Tắt Camera" : "Bật Camera"}
-        </button>
-      </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsPresentationMode(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+          >
+            <Play className="w-5 h-5 fill-current" />
+            Bắt đầu thuyết trình
+          </button>
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="relative aspect-video bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white group">
-            {!isCameraOn && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-slate-100/50 backdrop-blur-sm z-10">
-                <div className="bg-white p-6 rounded-full shadow-xl mb-4">
-                  <Camera className="w-12 h-12 text-blue-600" />
-                </div>
-                <p className="font-bold text-lg text-slate-700">Camera đang tắt</p>
-                <button 
-                  onClick={startCamera}
-                  className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 transition-colors"
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+        {/* Left Column: Configuration & Manual Test */}
+        <div className="xl:col-span-4 space-y-8">
+          {/* Model Config */}
+          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
+            <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-blue-600" />
+              Cấu hình mô hình
+            </h3>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Loại mô hình (st.selectbox)</label>
+                <select 
+                  value={modelType}
+                  onChange={(e) => setModelType(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 >
-                  Bật ngay
-                </button>
+                  <option>MediaPipe + Custom Logic (.h5)</option>
+                  <option>Random Forest Classifier (.pkl)</option>
+                  <option>Deep Learning Model (.pth)</option>
+                </select>
               </div>
-            )}
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-              autoPlay
-              playsInline
-            />
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={480}
-              className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"
-            />
-            
-            {/* HUD Overlay */}
-            <div className="absolute top-6 left-6 flex gap-3 z-20">
-              <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-                <div className={cn("w-2 h-2 rounded-full", isCameraOn ? "bg-green-500 animate-pulse" : "bg-red-500")} />
-                <span className="text-white text-xs font-bold uppercase tracking-widest">{isCameraOn ? "Live" : "Offline"}</span>
-              </div>
-              <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white text-xs font-bold uppercase tracking-widest">
-                {fps} FPS
-              </div>
-            </div>
-
-            {/* Virtual Cursor Overlay */}
-            {isCameraOn && (
-              <div 
-                className={cn(
-                  "absolute border-2 rounded-full pointer-events-none transition-all duration-75 z-50 flex items-center justify-center",
-                  gesture === 'Click' 
-                    ? "w-12 h-12 border-yellow-400 bg-yellow-400/40 scale-125" 
-                    : "w-8 h-8 border-white bg-blue-500/50"
-                )}
-                style={{ left: `${100 - virtualCursor.x}%`, top: `${virtualCursor.y}%`, transform: 'translate(-50%, -50%)' }}
-              >
-                {gesture === 'Click' && <div className="w-3 h-3 bg-white rounded-full animate-ping" />}
-                <div className={cn(
-                  "absolute inset-0 rounded-full animate-ping",
-                  gesture === 'Click' ? "bg-yellow-400/30" : "bg-white/30"
-                )} />
-              </div>
-            )}
-
-            {/* Laser Trail */}
-            {laserPoints.map((p, i) => (
-              <div 
-                key={i}
-                className="absolute w-3 h-3 bg-red-500 rounded-full pointer-events-none z-40 shadow-[0_0_15px_rgba(239,68,68,0.8)]"
-                style={{ left: `${100 - p.x}%`, top: `${p.y}%`, opacity: i / laserPoints.length }}
-              />
-            ))}
-          </div>
-
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between mb-8 relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="bg-indigo-100 p-3 rounded-2xl">
-                  <Monitor className="text-indigo-600 w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-900">Presentation Screen</h3>
-                  <p className="text-slate-500 text-sm">Điều khiển slide bằng cử chỉ vuốt hoặc click.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setIsPresentationMode(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-100"
-                >
-                  <Monitor className="w-4 h-4" />
-                  Thuyết trình
-                </button>
-                <button 
-                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                  className="p-3 hover:bg-slate-100 rounded-2xl transition-colors border border-slate-100"
-                >
-                  <Settings className="w-5 h-5 text-slate-600" />
-                </button>
-                <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl">
-                  <button onClick={() => setSlideIndex(s => Math.max(0, s-1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronLeft className="w-5 h-5" /></button>
-                  <span className="font-bold px-4 text-slate-700">
-                    {slideIndex + 1} / {slides.length > 0 ? slides.length : 5}
-                  </span>
-                  <button onClick={() => setSlideIndex(s => Math.min((slides.length > 0 ? slides.length - 1 : 4), s+1))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronRight className="w-5 h-5" /></button>
+              <div>
+                <label className="block text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Tải mô hình (st.file_uploader)</label>
+                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-400 transition-colors cursor-pointer bg-slate-50/50">
+                  <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-500">Kéo thả file mô hình vào đây</p>
                 </div>
               </div>
             </div>
+          </section>
 
-            <AnimatePresence>
-              {isSettingsOpen && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="mb-8 p-6 bg-slate-50 rounded-3xl border border-slate-200 overflow-hidden relative z-10"
-                >
-                  <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                    <LinkIcon className="w-4 h-4" />
-                    Kết nối nguồn thuyết trình
-                  </h4>
-                  <div className="flex gap-3">
-                    <input 
-                      type="text" 
-                      placeholder="Dán link Canva hoặc Google Slides (Embed URL)..."
-                      className="flex-1 px-5 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={tempUrl}
-                      onChange={(e) => setTempUrl(e.target.value)}
-                    />
-                    <button 
-                      onClick={() => {
-                        setPresentationUrl(tempUrl);
-                        setIsSettingsOpen(false);
-                      }}
-                      className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-colors"
-                    >
-                      Kết nối
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-3 italic">
-                    * Lưu ý: Hãy sử dụng link "Embed" để hiển thị tốt nhất.
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="aspect-[16/9] bg-slate-900 rounded-[2rem] flex items-center justify-center text-white relative overflow-hidden shadow-2xl border border-slate-800 max-w-4xl mx-auto">
-              {presentationUrl ? (
-                <iframe 
-                  src={presentationUrl}
-                  className="w-full h-full border-none"
-                  allowFullScreen
+          {/* Manual Input */}
+          <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
+            <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-blue-600" />
+              Kiểm thử thủ công
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-600 mb-1">Thumb-Index Distance (st.number_input)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={manualInputs.thumb_index_dist}
+                  onChange={(e) => setManualInputs({...manualInputs, thumb_index_dist: parseFloat(e.target.value)})}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-sm"
                 />
-              ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={uploadedFile ? uploadedFile.name + slideIndex : slideIndex}
-                    initial={{ opacity: 0, x: 100, scale: 0.9 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -100, scale: 0.9 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-                    className="text-center p-12 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-indigo-950"
-                  >
-                    <div className="bg-white/10 backdrop-blur-md px-6 py-2 rounded-full text-blue-400 font-bold text-sm mb-6 border border-white/5">
-                      {uploadedFile ? "FILE: " + uploadedFile.name.toUpperCase() : "PRESENTATION MODE"}
-                    </div>
-                    <h4 className="text-6xl font-black mb-6 tracking-tighter">
-                      {uploadedFile ? `Trang ${slideIndex + 1}` : `Slide ${slideIndex + 1}`}
-                    </h4>
-                    <div className="w-full max-w-2xl bg-white/5 rounded-3xl p-8 border border-white/10 text-left mb-8 overflow-hidden">
-                      {isParsing ? (
-                        <div className="flex flex-col items-center justify-center py-10 gap-4">
-                          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                          <p className="text-blue-400 font-bold">Đang xử lý tệp PPTX...</p>
-                        </div>
-                      ) : slides.length > 0 ? (
-                        <div className="space-y-4">
-                          <h5 className="text-2xl font-bold text-blue-400">Nội dung tệp: {uploadedFile?.name}</h5>
-                          {slides[slideIndex].image && (
-                            <img src={slides[slideIndex].image} className="w-full h-48 object-contain rounded-xl bg-black/20 mb-4" alt="Slide preview" referrerPolicy="no-referrer" />
-                          )}
-                          <p className="text-slate-300 line-clamp-4 text-lg">
-                            {slides[slideIndex].text || "Không tìm thấy nội dung văn bản cho trang này."}
-                          </p>
-                        </div>
-                      ) : uploadedFile ? (
-                        <div className="space-y-4">
-                          <h5 className="text-2xl font-bold text-blue-400">Nội dung tệp: {uploadedFile.name}</h5>
-                          <p className="text-slate-400 italic">Định dạng .ppt không hỗ trợ xem trước nội dung. Vui lòng sử dụng .pptx để có trải nghiệm tốt nhất.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <h5 className="text-2xl font-bold text-blue-400">Hướng dẫn nhanh</h5>
-                          <p className="text-slate-400 leading-relaxed">
-                            {slideIndex === 0 && "Chào mừng bạn đến với GestureAI. Hãy thử vuốt tay để chuyển slide."}
-                            {slideIndex === 1 && "Công nghệ nhận diện cử chỉ giúp bạn thuyết trình tự nhiên hơn."}
-                            {slideIndex === 2 && "Bạn có thể dùng Laser Pointer để chỉ vào các điểm quan trọng."}
-                            {slideIndex === 3 && "Hệ thống hỗ trợ cả Canva và Google Slides thông qua liên kết."}
-                            {slideIndex === 4 && "Cảm ơn bạn đã theo dõi buổi thuyết trình này!"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-4 flex gap-2">
-                      {(slides.length > 0 ? slides : [0,1,2,3,4]).map((_, i) => (
-                        <div key={i} className={cn("w-2 h-1.5 rounded-full transition-all duration-500", i === slideIndex ? "bg-blue-500 w-8" : "bg-white/10")} />
-                      ))}
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-              )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {['index_up', 'middle_up', 'ring_up', 'pinky_up'].map((key) => (
+                  <div key={key}>
+                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">{key.replace('_', ' ')}</label>
+                    <select 
+                      value={manualInputs[key as keyof typeof manualInputs]}
+                      onChange={(e) => setManualInputs({...manualInputs, [key]: parseInt(e.target.value)})}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-sm"
+                    >
+                      <option value={1}>Duỗi (1)</option>
+                      <option value={0}>Gập (0)</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <button 
+                onClick={handleManualPredict}
+                className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold mt-4 hover:bg-slate-800 transition-colors"
+              >
+                Dự đoán kết quả
+              </button>
+            </div>
+          </section>
+        </div>
+        {/* Right Column: Real-time Implementation & Results */}
+        <div className="xl:col-span-8 space-y-8">
+          {/* Webcam View */}
+          <div className="bg-white p-4 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden">
+            <div className="aspect-video bg-slate-900 rounded-[2.5rem] overflow-hidden relative group">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover scale-x-[-1]"
+                autoPlay
+                playsInline
+              />
+              <canvas
+                ref={canvasRef}
+                width={640}
+                height={480}
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"
+              />
               
-              {/* Virtual Laser on Slide */}
+              <div className="absolute top-6 left-6 flex gap-3">
+                <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                  <div className={cn("w-2 h-2 rounded-full", isCameraOn ? "bg-green-500 animate-pulse" : "bg-red-500")} />
+                  Live: {fps} FPS
+                </div>
+                <button
+                  onClick={isCameraOn ? stopCamera : startCamera}
+                  className={cn(
+                    "bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 hover:bg-black/60 transition-all",
+                    isCameraOn ? "text-red-400" : "text-blue-400"
+                  )}
+                >
+                  <Camera className="w-4 h-4" />
+                  {isCameraOn ? "Tắt Camera" : "Bật Camera"}
+                </button>
+              </div>
+
+              {/* Virtual Laser on Preview */}
               {gesture === 'Laser' && (
                 <div 
                   className="absolute w-6 h-6 bg-red-500 rounded-full blur-[3px] shadow-[0_0_20px_red] z-50 pointer-events-none"
@@ -749,164 +684,68 @@ const DemoPage = () => {
                 />
               )}
             </div>
-
-            {/* Presentation Mode Overlay */}
-            <AnimatePresence>
-              {isPresentationMode && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[100] bg-slate-950 flex flex-col"
-                >
-                  {/* Minimal Exit Button - Auto-hide or very subtle */}
-                  <button 
-                    onClick={() => setIsPresentationMode(false)}
-                    className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/60 text-white/40 hover:text-white rounded-full backdrop-blur-sm z-[70] transition-all opacity-0 hover:opacity-100"
-                    title="Thoát chế độ thuyết trình"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-
-                  {/* Main Content */}
-                  <div className="flex-1 relative overflow-hidden">
-                    {presentationUrl ? (
-                      <iframe 
-                        src={presentationUrl}
-                        className="w-full h-full border-none"
-                        allowFullScreen
-                      />
-                    ) : (
-                      <AnimatePresence mode="wait">
-                        <motion.div
-                          key={slideIndex}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="w-full h-full flex flex-col items-center justify-center bg-black"
-                        >
-                          <div className="w-full h-full flex items-center justify-center relative">
-                            <div className="w-full h-full flex items-center justify-center">
-                            
-                              {slides.length > 0 ? (
-                                <div className="w-full h-full flex items-center justify-center p-0">
-                                  {slides[slideIndex].image ? (
-                                    <div className="w-full h-full flex items-center justify-center bg-black">
-                                      <img src={slides[slideIndex].image} className="max-w-full max-h-full object-contain" alt="Slide content" referrerPolicy="no-referrer" />
-                                    </div>
-                                  ) : (
-                                    <div className="p-20 space-y-8 flex flex-col justify-center items-center h-full bg-slate-950/50 backdrop-blur-3xl text-center w-full">
-                                      <h5 className="text-5xl font-black text-blue-500 leading-tight tracking-tighter uppercase">{uploadedFile?.name}</h5>
-                                      <p className="text-slate-200 text-3xl leading-relaxed font-light max-w-4xl">
-                                        {slides[slideIndex].text || "Nội dung đang được cập nhật cho trang này..."}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center space-y-12 p-20 bg-gradient-to-br from-slate-950 to-blue-950">
-                                  <h5 className="text-7xl font-black text-blue-500 tracking-tighter uppercase">GestureAI Presentation</h5>
-                                  <p className="text-slate-300 text-4xl leading-relaxed font-light max-w-5xl text-center">
-                                    {slideIndex === 0 && "Chào mừng bạn đến với GestureAI. Hệ thống điều khiển thuyết trình bằng cử chỉ tay tiên tiến nhất."}
-                                    {slideIndex === 1 && "Công nghệ nhận diện cử chỉ mượt mà, độ trễ cực thấp giúp bạn tự tin hơn."}
-                                    {slideIndex === 2 && "Laser Pointer ảo chuyên nghiệp, giúp bạn nhấn mạnh các thông tin quan trọng."}
-                                    {slideIndex === 3 && "Hỗ trợ đa nền tảng thuyết trình từ Canva, Google Slides đến file PPT cá nhân."}
-                                    {slideIndex === 4 && "Cảm ơn bạn đã theo dõi! Hãy bắt đầu trải nghiệm ngay hôm nay."}
-                                  </p>
-                                </div>
-                              )}
-
-                            </div>
-                          </div>
-                        </motion.div>
-                      </AnimatePresence>
-                    )}
-
-                    {/* Floating Camera Overlay - Shrunk and Cleaned */}
-                    <motion.div 
-                      drag
-                      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-                      className="absolute bottom-4 right-4 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-50 cursor-move opacity-40 hover:opacity-100 transition-opacity"
-                    >
-                      <video
-                        ref={presentationVideoRef}
-                        className="w-full h-full object-cover scale-x-[-1]"
-                        autoPlay
-                        playsInline
-                      />
-                      <canvas
-                        ref={presentationCanvasRef}
-                        width={640}
-                        height={480}
-                        className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"
-                      />
-                      <div className="absolute top-2 left-2">
-                        <div className="bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/10 text-[8px] font-bold text-white uppercase tracking-widest">
-                          {fps} FPS
-                        </div>
-                      </div>
-                      {/* Virtual Cursor in Overlay */}
-                      <div 
-                        className={cn(
-                          "absolute border-2 rounded-full pointer-events-none transition-all duration-75 z-50 flex items-center justify-center",
-                          gesture === 'Click' ? "w-6 h-6 border-yellow-400 bg-yellow-400/40" : "w-4 h-4 border-white bg-blue-500/50"
-                        )}
-                        style={{ left: `${100 - virtualCursor.x}%`, top: `${virtualCursor.y}%`, transform: 'translate(-50%, -50%)' }}
-                      />
-                    </motion.div>
-
-                    {/* Laser on Full Screen */}
-                    {gesture === 'Laser' && (
-                      <div 
-                        className="absolute w-8 h-8 bg-red-500 rounded-full blur-[4px] shadow-[0_0_30px_red] z-[60] pointer-events-none"
-                        style={{ left: `${100 - virtualCursor.x}%`, top: `${virtualCursor.y}%`, transform: 'translate(-50%, -50%)' }}
-                      />
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
-        </div>
 
-        <div className="space-y-6">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl group hover:border-blue-200 transition-colors">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Cử chỉ hiện tại</p>
-            <div className="flex items-center gap-6 mb-4">
-              <motion.div 
-                key={gesture}
-                initial={{ scale: 0.8, rotate: -10 }}
-                animate={{ scale: 1, rotate: 0 }}
-                className={cn(
-                  "w-20 h-20 rounded-3xl flex items-center justify-center shadow-lg",
-                  gesture === 'None' ? "bg-slate-100 text-slate-400" : "bg-blue-600 text-white shadow-blue-200"
-                )}
-              >
-                {gesture === 'Click' && <Zap className="w-10 h-10 fill-current" />}
-                {gesture === 'Laser' && <CircleDot className="w-10 h-10" />}
-                {gesture === 'Swipe Left' && <ChevronRight className="w-10 h-10" />}
-                {gesture === 'Swipe Right' && <ChevronLeft className="w-10 h-10" />}
-                {gesture === 'None' && <Camera className="w-10 h-10 opacity-30" />}
-              </motion.div>
-              <div>
-                <p className="text-3xl font-black text-slate-900">{gesture === 'None' ? "---" : gesture}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex gap-0.5">
-                    {[1,2,3,4,5].map(i => (
-                      <div key={i} className={cn("w-1.5 h-4 rounded-full", i <= Math.ceil(confidence * 5) ? "bg-blue-500" : "bg-slate-200")} />
-                    ))}
-                  </div>
-                  <p className="text-sm font-bold text-blue-600">{Math.round(confidence * 100)}%</p>
+          {/* Prediction Result Display */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <section className="bg-blue-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-blue-200">
+              <p className="text-blue-100 text-sm font-bold uppercase tracking-widest mb-4">Kết quả dự đoán</p>
+              <div className="flex items-center gap-6">
+                <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center backdrop-blur-md">
+                  {gesture === 'Click' && <Zap className="w-10 h-10 fill-current" />}
+                  {gesture === 'Laser' && <CircleDot className="w-10 h-10" />}
+                  {(gesture === 'Swipe Left' || gesture === 'Swipe Right') && <ChevronRight className="w-10 h-10" />}
+                  {gesture === 'None' && <Camera className="w-10 h-10 opacity-30" />}
+                </div>
+                <div>
+                  <h4 className="text-4xl font-black tracking-tighter">
+                    {gesture === 'None' ? "Chưa nhận diện" : `Cử chỉ: ${gesture}`}
+                  </h4>
+                  <p className="text-blue-100 mt-1 font-medium italic">
+                    {gesture === 'Click' && "Hành động: Click chuột / Next Slide"}
+                    {gesture === 'Laser' && "Hành động: Kích hoạt Laser Pointer"}
+                    {(gesture === 'Swipe Left' || gesture === 'Swipe Right') && "Hành động: Chuyển slide nhanh"}
+                    {gesture === 'None' && "Hệ thống đang chờ cử chỉ..."}
+                  </p>
                 </div>
               </div>
-            </div>
+            </section>
+
+            <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
+              <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mb-4">Độ tin cậy (Probability)</p>
+              <div className="flex items-end gap-4">
+                <span className="text-6xl font-black text-slate-900 tracking-tighter">
+                  {Math.round(confidence * 100)}%
+                </span>
+                <div className="flex-1 h-4 bg-slate-100 rounded-full mb-3 overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${confidence * 100}%` }}
+                    className="h-full bg-blue-600 rounded-full"
+                  />
+                </div>
+              </div>
+              <p className="text-slate-500 text-sm mt-4">
+                Mô hình đang sử dụng: <span className="font-bold text-blue-600">{modelType}</span>
+              </p>
+            </section>
           </div>
 
+          {/* PPT Upload Section */}
           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
-            <h4 className="font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Upload className="w-5 h-5 text-blue-600" />
-              Tải lên PPT
-            </h4>
+            <div className="flex items-center justify-between mb-6">
+              <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-blue-600" />
+                Tải lên PPT (st.file_uploader)
+              </h4>
+              <button 
+                onClick={() => setIsPresentationMode(true)}
+                className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg"
+              >
+                <Monitor className="w-4 h-4" />
+                Bắt đầu thuyết trình
+              </button>
+            </div>
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -936,32 +775,55 @@ const DemoPage = () => {
               </p>
             </div>
           </div>
-
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-blue-200 relative overflow-hidden">
-            <div className="relative z-10">
-              <h4 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <Info className="w-5 h-5" />
-                Hướng dẫn cử chỉ
-              </h4>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                  <div className="bg-white/20 p-2 rounded-xl"><CircleDot className="w-4 h-4" /></div>
-                  <span className="text-sm font-medium">1 ngón trỏ: Laser Pointer</span>
-                </div>
-                <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                  <div className="bg-white/20 p-2 rounded-xl"><Zap className="w-4 h-4" /></div>
-                  <span className="text-sm font-medium">Chụm ngón cái: Click / Next Slide</span>
-                </div>
-                <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                  <div className="bg-white/20 p-2 rounded-xl"><ChevronRight className="w-4 h-4" /></div>
-                  <span className="text-sm font-medium">Vuốt tay: Chuyển slide nhanh</span>
-                </div>
-              </div>
-            </div>
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
-          </div>
         </div>
       </div>
+
+      {/* Presentation Mode Overlay */}
+      <AnimatePresence>
+        {isPresentationMode && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-slate-950 flex flex-col"
+          >
+            <button 
+              onClick={() => setIsPresentationMode(false)}
+              className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/60 text-white/40 hover:text-white rounded-full backdrop-blur-sm z-[70] transition-all opacity-0 hover:opacity-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex-1 relative overflow-hidden">
+              <div className="w-full h-full flex flex-col items-center justify-center bg-black">
+                {slides.length > 0 ? (
+                  <div className="w-full h-full flex items-center justify-center bg-black">
+                    {slides[slideIndex].image ? (
+                      <img src={slides[slideIndex].image} className="max-w-full max-h-full object-contain" alt="Slide content" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="p-20 text-center">
+                        <h5 className="text-5xl font-black text-blue-500 uppercase mb-8">{uploadedFile?.name}</h5>
+                        <p className="text-slate-200 text-3xl font-light max-w-4xl mx-auto">
+                          {slides[slideIndex].text || "Nội dung đang được cập nhật cho trang này..."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center p-20">
+                    <h5 className="text-5xl font-black text-blue-500 uppercase mb-8">Chế độ thuyết trình</h5>
+                    <p className="text-slate-300 text-2xl">Sử dụng cử chỉ tay để điều khiển slide này.</p>
+                  </div>
+                )}
+              </div>
+              {/* Floating Camera Overlay */}
+              <div className="absolute bottom-4 right-4 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-50">
+                <video ref={presentationVideoRef} className="w-full h-full object-cover scale-x-[-1]" autoPlay playsInline />
+                <canvas ref={presentationCanvasRef} className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60" />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1124,14 +986,26 @@ const StatsPage = () => {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900">
+      <div className="flex bg-white min-h-screen font-sans text-slate-900 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route path="/" element={<IntroPage />} />
-            <Route path="/demo" element={<DemoPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-          </Routes>
+        <main className="flex-1 overflow-y-auto relative">
+          {/* Streamlit Header Anchor */}
+          <div className="h-1 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 w-full sticky top-0 z-50" />
+          
+          <div className="max-w-5xl mx-auto py-12 px-8">
+            <Routes>
+              <Route path="/" element={<IntroPage />} />
+              <Route path="/demo" element={<DemoPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+            </Routes>
+          </div>
+
+          <footer className="max-w-5xl mx-auto px-8 py-12 border-t border-slate-100 mt-12 flex justify-between items-center text-slate-400 text-sm">
+            <p>Built with React (Streamlit UI Pattern)</p>
+            <div className="flex gap-4">
+              <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-full" /> System Online</span>
+            </div>
+          </footer>
         </main>
       </div>
     </BrowserRouter>
