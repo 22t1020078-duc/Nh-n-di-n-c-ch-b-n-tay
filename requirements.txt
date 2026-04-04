@@ -1,7 +1,7 @@
 streamlit>=1.20.0
 streamlit-webrtc
 av
-mediapipe
+mediapipe==0.10.9
 pandas
 numpy
 python-pptx
