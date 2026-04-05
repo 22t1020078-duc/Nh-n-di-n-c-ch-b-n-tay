@@ -6,6 +6,7 @@ import numpy as np
 import time
 import av
 import io
+import os
 import tempfile
 from PIL import Image
 from pptx import Presentation
