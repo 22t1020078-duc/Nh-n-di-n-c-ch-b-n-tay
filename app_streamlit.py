@@ -61,14 +61,15 @@ def detect_gesture_heuristic(hand_landmarks, prev_x=None):
     is_middle_folded = middle_tip.y > middle_mcp.y
     
     gesture = "None"
-    
-    # Kiểm tra vuốt (Swipe) dựa trên sự thay đổi tọa độ X
     if prev_x is not None:
         diff = curr_x - prev_x
-        if diff > 0.15: # Ngưỡng vuốt phải
+        if diff > 0.08:      # === FIX: giảm ngưỡng ===
             gesture = "Swipe Right"
-        elif diff < -0.15: # Ngưỡng vuốt trái
+        elif diff < -0.08:   # === FIX: giảm ngưỡng ===
             gesture = "Swipe Left"
+    
+    # ... phần còn lại giữ nguyên
+    return gesture, curr_x
     
     if gesture == "None":
         if dist_thumb_index < 0.05:
@@ -89,6 +90,7 @@ class VideoProcessor(VideoProcessorBase):
         self.result_queue = queue.Queue()
         self.prev_x = None
         self.last_gesture_time = 0
+        self.last_gesture = "None"          # === FIX: debug gesture ===
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -99,24 +101,25 @@ class VideoProcessor(VideoProcessorBase):
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                
                 gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
                 self.prev_x = curr_x
-                
-                # Hiển thị nhãn lên camera feed
+                self.last_gesture = gesture   # === FIX: lưu gesture ===
+
                 color = (0, 255, 0)
                 if "Swipe" in gesture:
-                    color = (0, 165, 255) # Màu cam cho Swipe
-                
+                    color = (0, 165, 255)
                 cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-                
-                # Gửi tín hiệu chuyển slide vào queue (có cooldown 1s để tránh nhảy slide liên tục)
+
+                # Swipe chỉ gửi queue khi đủ cooldown
                 curr_time = time.time()
                 if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
                     self.result_queue.put(gesture)
                     self.last_gesture_time = curr_time
         else:
             self.prev_x = None
-        
+            self.last_gesture = "None"
+
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # --- Helper for Slide Content ---
@@ -165,8 +168,10 @@ elif page == "Triển khai mô hình":
             st.subheader("📂 Quản lý Slide")
             ppt_file = st.file_uploader("Tải file PPTX", type=["pptx"])
             if ppt_file:
-                st.session_state.prs = Presentation(ppt_file)
-                st.success(f"Đã tải: {ppt_file.name} ({len(st.session_state.prs.slides)} slides)")
+                # === FIX 1: Dùng BytesIO ===
+                prs_bytes = io.BytesIO(ppt_file.read())
+                st.session_state.prs = Presentation(prs_bytes)
+                st.success(f"✅ Đã tải: {ppt_file.name} ({len(st.session_state.prs.slides)} slides)")
                 st.info("Chuyển sang tab 'Chế độ trình chiếu' để bắt đầu.")
 
     with tab_present:
@@ -191,12 +196,15 @@ elif page == "Triển khai mô hình":
                 
                 # Lắng nghe cử chỉ từ VideoProcessor
                 if webrtc_ctx.video_processor:
+                    # === FIX: hiển thị gesture realtime ===
+                    st.caption(f"**Gesture hiện tại:** {webrtc_ctx.video_processor.last_gesture}")
+                    
                     try:
                         gesture = webrtc_ctx.video_processor.result_queue.get_nowait()
-                        if gesture == "Swipe Right":
+                        if "Swipe Right" in gesture:
                             st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
                             st.rerun()
-                        elif gesture == "Swipe Left":
+                        elif "Swipe Left" in gesture:
                             st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
                             st.rerun()
                     except queue.Empty:
