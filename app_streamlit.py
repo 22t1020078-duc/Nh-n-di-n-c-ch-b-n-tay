@@ -216,10 +216,124 @@ def detect_gesture_heuristic(hand_landmarks, prev_x=None):
                 """, unsafe_allow_html=True)
     
                 st.progress((current_idx + 1) / total_slides)
-elif page == "Đánh giá hệ thống":
-    st.title("📈 Đánh giá hệ thống")
-    st.metric("Accuracy", "95%", "+2%")
-    st.line_chart(np.random.randn(20, 2))
+elif page == "Triển khai mô hình":
+    st.title("🚀 Triển khai & Trình chiếu")
+    
+    # Khởi tạo trạng thái slide
+    if 'slide_idx' not in st.session_state:
+        st.session_state.slide_idx = 0
+    if 'last_swipe' not in st.session_state:
+        st.session_state.last_swipe = None
+        st.session_state.swipe_timestamp = 0
 
-st.divider()
-st.caption("Built with Streamlit • GestureAI Project")
+    # Tabs cho các chế độ
+    tab_setup, tab_present = st.tabs(["🛠️ Thiết lập", "📺 Chế độ trình chiếu"])
+
+    with tab_setup:
+        col_l, col_r = st.columns([1, 1.5])
+        with col_l:
+            st.subheader("📹 Phân tích Video")
+            up_vid = st.file_uploader("Tải video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
+            if up_vid:
+                st.video(up_vid)
+                if st.button("Phân tích Video", type="primary"):
+                    st.success("Phân tích hoàn tất!")
+
+        with col_r:
+            st.subheader("📂 Quản lý Slide")
+            ppt_file = st.file_uploader("Tải file PPTX", type=["pptx"])
+            if ppt_file:
+                prs_bytes = io.BytesIO(ppt_file.read())
+                st.session_state.prs = Presentation(prs_bytes)
+                st.success(f"✅ Đã tải: {ppt_file.name} ({len(st.session_state.prs.slides)} slides)")
+                st.info("Chuyển sang tab 'Chế độ trình chiếu' để bắt đầu.")
+
+    with tab_present:
+        if 'prs' not in st.session_state:
+            st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
+        else:
+            st.markdown("### 📺 Đang trình chiếu...")
+
+            col_cam, col_slide = st.columns([1, 3])
+
+            with col_cam:
+                st.write("📷 Camera Control")
+                webrtc_ctx = webrtc_streamer(
+                    key="present-gesture",
+                    mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
+                    media_stream_constraints={"video": {"width": 320, "height": 240}, "audio": False},
+                    video_processor_factory=VideoProcessor,
+                    async_processing=True,
+                )
+                st.caption("Vuốt TRÁI ← để về trước | Vuốt PHẢI → để sang sau")
+
+                processor = getattr(webrtc_ctx, 'video_processor', None)
+                if processor is not None:
+                    st.caption(f"**Gesture hiện tại:** {processor.last_gesture}")
+
+                    # Xử lý swipe (đã fix drain queue)
+                    try:
+                        while True:
+                            gesture = processor.result_queue.get_nowait()
+                            if "Swipe Right" in gesture:
+                                st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                                st.session_state.last_swipe = "Swipe Right"
+                                st.session_state.swipe_timestamp = time.time()
+                                st.rerun()
+                            elif "Swipe Left" in gesture:
+                                st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                                st.session_state.last_swipe = "Swipe Left"
+                                st.session_state.swipe_timestamp = time.time()
+                                st.rerun()
+                    except queue.Empty:
+                        pass
+
+                st.divider()
+                c1, c2 = st.columns(2)
+                if c1.button("⬅️ Trước", use_container_width=True):
+                    st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                    st.rerun()
+                if c2.button("Sau ➡️", use_container_width=True):
+                    st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                    st.rerun()
+
+                if st.button("Reset Slide", type="secondary", use_container_width=True):
+                    st.session_state.slide_idx = 0
+                    st.rerun()
+
+            # ==================== PHẦN HIỂN THỊ SLIDE ====================
+            with col_slide:
+                total_slides = len(st.session_state.prs.slides)
+                current_idx = st.session_state.slide_idx
+                current_slide = st.session_state.prs.slides[current_idx]
+
+                st.markdown(f"#### Slide **{current_idx + 1} / {total_slides}**")
+
+                # Thông báo swipe
+                current_time = time.time()
+                if st.session_state.last_swipe and current_time - st.session_state.swipe_timestamp < 4.0:
+                    icon = "➡️" if "Right" in st.session_state.last_swipe else "⬅️"
+                    st.success(f"{icon} **{st.session_state.last_swipe.upper()}** - Slide đã chuyển!", icon=icon)
+
+                slide_text = get_slide_content(current_slide)
+                
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+                    padding: 50px 40px;
+                    border-radius: 20px;
+                    border: 4px solid #1f2937;
+                    min-height: 560px;
+                    max-height: 650px;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    color: #1f2937;
+                    font-size: 1.45em;
+                    line-height: 1.75;
+                ">
+                    {slide_text}
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.progress((current_idx + 1) / total_slides)
