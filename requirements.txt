@@ -1,9 +1,8 @@
 streamlit>=1.20.0
-opencv-python-headless
-mediapipe==0.10.9
-numpy
-pandas
 streamlit-webrtc
 av
+mediapipe==0.10.9
+pandas
+numpy
 python-pptx
 Pillow
