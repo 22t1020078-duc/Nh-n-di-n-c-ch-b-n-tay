@@ -40,35 +40,55 @@ def get_mediapipe_hands():
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 
+import queue
+
 # --- Heuristic Gesture Logic ---
 def calculate_distance(p1, p2):
     return np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2 + (p1.z - p2.z)**2)
 
-def detect_gesture_heuristic(hand_landmarks):
-    # Landmarks: 4: Thumb_Tip, 8: Index_Tip, 12: Middle_Tip
+def detect_gesture_heuristic(hand_landmarks, prev_x=None):
     thumb_tip = hand_landmarks.landmark[4]
     index_tip = hand_landmarks.landmark[8]
     middle_tip = hand_landmarks.landmark[12]
     index_mcp = hand_landmarks.landmark[5]
     middle_mcp = hand_landmarks.landmark[9]
     
+    # Tọa độ X trung tâm bàn tay (dùng landmark 9 - Middle Finger MCP)
+    curr_x = hand_landmarks.landmark[9].x
+    
     dist_thumb_index = calculate_distance(thumb_tip, index_tip)
     is_index_ext = index_tip.y < index_mcp.y
     is_middle_folded = middle_tip.y > middle_mcp.y
     
-    if dist_thumb_index < 0.05:
-        return "Click"
-    elif is_index_ext and is_middle_folded:
-        return "Laser Pointer"
-    elif not is_index_ext and is_middle_folded:
-        return "Fist (Nắm tay)"
-    else:
-        return "Open Hand"
+    gesture = "None"
+    
+    # Kiểm tra vuốt (Swipe) dựa trên sự thay đổi tọa độ X
+    if prev_x is not None:
+        diff = curr_x - prev_x
+        if diff > 0.15: # Ngưỡng vuốt phải
+            gesture = "Swipe Right"
+        elif diff < -0.15: # Ngưỡng vuốt trái
+            gesture = "Swipe Left"
+    
+    if gesture == "None":
+        if dist_thumb_index < 0.05:
+            gesture = "Click"
+        elif is_index_ext and is_middle_folded:
+            gesture = "Laser Pointer"
+        elif not is_index_ext and is_middle_folded:
+            gesture = "Fist (Nắm tay)"
+        else:
+            gesture = "Open Hand"
+            
+    return gesture, curr_x
 
 # --- WebRTC Processor ---
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.hands = get_mediapipe_hands()
+        self.result_queue = queue.Queue()
+        self.prev_x = None
+        self.last_gesture_time = 0
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -79,10 +99,33 @@ class VideoProcessor(VideoProcessorBase):
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                gesture = detect_gesture_heuristic(hand_landmarks)
-                cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
+                self.prev_x = curr_x
+                
+                # Hiển thị nhãn lên camera feed
+                color = (0, 255, 0)
+                if "Swipe" in gesture:
+                    color = (0, 165, 255) # Màu cam cho Swipe
+                
+                cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                
+                # Gửi tín hiệu chuyển slide vào queue (có cooldown 1s để tránh nhảy slide liên tục)
+                curr_time = time.time()
+                if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
+                    self.result_queue.put(gesture)
+                    self.last_gesture_time = curr_time
+        else:
+            self.prev_x = None
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+# --- Helper for Slide Content ---
+def get_slide_content(slide):
+    text_content = []
+    for shape in slide.shapes:
+        if hasattr(shape, "text") and shape.text.strip():
+            text_content.append(shape.text.strip())
+    return "\n\n".join(text_content) if text_content else "Slide này không có nội dung văn bản."
 
 # --- Sidebar ---
 with st.sidebar:
@@ -137,15 +180,28 @@ elif page == "Triển khai mô hình":
             
             with col_cam:
                 st.write("📷 Camera Control")
-                webrtc_streamer(
+                webrtc_ctx = webrtc_streamer(
                     key="present-gesture", mode=WebRtcMode.SENDRECV,
                     rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
                     media_stream_constraints={"video": {"width": 320, "height": 240}, "audio": False},
                     video_processor_factory=VideoProcessor,
                     async_processing=True,
                 )
-                st.caption("Sử dụng cử chỉ để chuyển Slide")
+                st.caption("Vuốt TRÁI để về trước, Vuốt PHẢI để sang sau")
                 
+                # Lắng nghe cử chỉ từ VideoProcessor
+                if webrtc_ctx.video_processor:
+                    try:
+                        gesture = webrtc_ctx.video_processor.result_queue.get_nowait()
+                        if gesture == "Swipe Right":
+                            st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                            st.rerun()
+                        elif gesture == "Swipe Left":
+                            st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                            st.rerun()
+                    except queue.Empty:
+                        pass
+
                 # Nút điều khiển thủ công
                 st.divider()
                 c1, c2 = st.columns(2)
@@ -162,13 +218,20 @@ elif page == "Triển khai mô hình":
                 # Hiển thị Slide hiện tại
                 total_slides = len(st.session_state.prs.slides)
                 current_idx = st.session_state.slide_idx
+                current_slide = st.session_state.prs.slides[current_idx]
                 
-                st.markdown(f"**Slide {current_idx + 1} / {total_slides}**")
+                st.markdown(f"#### Slide {current_idx + 1} / {total_slides}")
                 
-                # Hiển thị ảnh slide (placeholder)
-                st.image(f"https://picsum.photos/seed/slide_{current_idx}/800/450", 
-                         use_container_width=True,
-                         caption=f"Nội dung Slide số {current_idx + 1}")
+                # Trích xuất và hiển thị nội dung thực của Slide
+                slide_text = get_slide_content(current_slide)
+                
+                st.markdown(f"""
+                <div style="background-color: #f0f2f6; padding: 40px; border-radius: 15px; border: 2px solid #d1d5db; min-height: 400px; color: #1f2937;">
+                    <div style="white-space: pre-wrap; font-size: 1.2em; line-height: 1.6;">
+                        {slide_text}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 st.progress((current_idx + 1) / total_slides)
 
