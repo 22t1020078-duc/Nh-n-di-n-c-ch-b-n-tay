@@ -130,52 +130,16 @@ elif page == "Triển khai mô hình":
     col_left, col_right = st.columns([1, 1.5])
     
     with col_left:
-        st.subheader("⚙️ Cấu hình hệ thống")
+        st.subheader("⚙️ Thông số mô hình")
         
-        with st.container(border=True):
-            st.info("Hệ thống hiện đang sử dụng mô hình **MediaPipe Hand Landmarker** tối ưu cho môi trường Web.")
-            
-            model_info = {
-                "Kiến trúc": "MediaPipe Hands",
-                "Độ trễ": "~25ms",
-                "Tài nguyên": "Thấp (CPU Optimized)"
-            }
-            st.json(model_info)
+        model_info = {
+            "Kiến trúc": "MediaPipe Hands",
+            "Độ trễ": "~25ms",
+            "Tài nguyên": "Thấp (CPU Optimized)"
+        }
+        st.json(model_info)
         
-        st.divider()
-        st.subheader("🧪 Kiểm thử thủ công (Manual Test)")
-        
-        with st.container(border=True):
-            st.write("Nhập các thông số đặc trưng để kiểm tra logic dự đoán:")
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                dist = st.number_input("Khoảng cách Thumb-Index", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
-                f1 = st.selectbox("Ngón trỏ (Index)", ["Gập (0)", "Duỗi (1)"], index=1)
-            with c2:
-                f2 = st.selectbox("Ngón giữa (Middle)", ["Gập (0)", "Duỗi (1)"], index=0)
-                f3 = st.selectbox("Ngón áp út (Ring)", ["Gập (0)", "Duỗi (1)"], index=0)
-            
-            if st.button("Dự đoán cử chỉ", type="primary"):
-                with st.spinner("Đang tính toán..."):
-                    time.sleep(0.4)
-                    if dist < 0.1 and f1 == "Duỗi (1)" and f2 == "Gập (0)":
-                        st.balloons()
-                        st.markdown("""
-                        <div style="background-color:#d4edda; padding:20px; border-radius:10px; border-left:5px solid #28a745;">
-                            <h3 style="color:#155724; margin:0;">🎯 Kết quả: Click</h3>
-                            <p style="color:#155724; margin:0;">Độ tin cậy: <b>98.4%</b></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    elif f1 == "Duỗi (1)" and f2 == "Duỗi (1)" and f3 == "Gập (0)":
-                        st.markdown("""
-                        <div style="background-color:#fff3cd; padding:20px; border-radius:10px; border-left:5px solid #ffc107;">
-                            <h3 style="color:#856404; margin:0;">🔦 Kết quả: Laser Pointer</h3>
-                            <p style="color:#856404; margin:0;">Độ tin cậy: <b>92.1%</b></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.info("Kết quả: **Không xác định (None)**")
+        st.info("💡 Hệ thống đã được cấu hình sẵn với mô hình tối ưu nhất. Không cần tùy chỉnh thêm.")
 
     with col_right:
         st.subheader("📷 Nhận diện thời gian thực (WebRTC)")
