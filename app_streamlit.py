@@ -124,11 +124,20 @@ class VideoProcessor(VideoProcessorBase):
 
 # --- Helper for Slide Content ---
 def get_slide_content(slide):
-    text_content = []
+    lines = []
+    
+    # Lấy tiêu đề slide (nếu có)
+    if slide.shapes.title and slide.shapes.title.text.strip():
+        lines.append(f"**{slide.shapes.title.text.strip()}**")
+    
+    # Lấy tất cả text còn lại (bao gồm bullet, text box, placeholder...)
     for shape in slide.shapes:
-        if hasattr(shape, "text") and shape.text.strip():
-            text_content.append(shape.text.strip())
-    return "\n\n".join(text_content) if text_content else "Slide này không có nội dung văn bản."
+        if shape.has_text_frame and shape != slide.shapes.title:
+            text = shape.text.strip()
+            if text:
+                lines.append(text)
+    
+    return "\n\n".join(lines) if lines else "Slide này không có nội dung văn bản."
 
 # --- Sidebar ---
 with st.sidebar:
@@ -178,69 +187,99 @@ elif page == "Triển khai mô hình":
         if 'prs' not in st.session_state:
             st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
         else:
-            # Giao diện trình chiếu
+            # Khởi tạo session_state cho thông báo swipe
+            if 'last_swipe' not in st.session_state:
+                st.session_state.last_swipe = None
+                st.session_state.swipe_timestamp = 0
+    
             st.markdown("### 📺 Đang trình chiếu...")
-            
+    
             col_cam, col_slide = st.columns([1, 3])
-            
+    
             with col_cam:
                 st.write("📷 Camera Control")
                 webrtc_ctx = webrtc_streamer(
-                    key="present-gesture", mode=WebRtcMode.SENDRECV,
+                    key="present-gesture",
+                    mode=WebRtcMode.SENDRECV,
                     rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
                     media_stream_constraints={"video": {"width": 320, "height": 240}, "audio": False},
                     video_processor_factory=VideoProcessor,
                     async_processing=True,
                 )
-                st.caption("Vuốt TRÁI để về trước, Vuốt PHẢI để sang sau")
-                
-                # Lắng nghe cử chỉ từ VideoProcessor
+                st.caption("Vuốt TRÁI ← để về trước | Vuốt PHẢI → để sang sau")
+    
+                # Hiển thị gesture realtime (để bạn check dễ dàng)
                 if webrtc_ctx.video_processor:
-                    # === FIX: hiển thị gesture realtime ===
                     st.caption(f"**Gesture hiện tại:** {webrtc_ctx.video_processor.last_gesture}")
-                    
+    
+                    # Xử lý swipe từ queue
                     try:
                         gesture = webrtc_ctx.video_processor.result_queue.get_nowait()
                         if "Swipe Right" in gesture:
                             st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                            st.session_state.last_swipe = "Swipe Right"
+                            st.session_state.swipe_timestamp = time.time()
                             st.rerun()
                         elif "Swipe Left" in gesture:
                             st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                            st.session_state.last_swipe = "Swipe Left"
+                            st.session_state.swipe_timestamp = time.time()
                             st.rerun()
                     except queue.Empty:
                         pass
-
+    
                 # Nút điều khiển thủ công
                 st.divider()
                 c1, c2 = st.columns(2)
                 if c1.button("⬅️ Trước"):
                     st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                    st.rerun()
                 if c2.button("Sau ➡️"):
                     st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
-                
+                    st.rerun()
+    
                 if st.button("Reset Slide", type="secondary"):
                     st.session_state.slide_idx = 0
                     st.rerun()
-
+    
+            # ==================== PHẦN HIỂN THỊ SLIDE (đã sửa đẹp hơn) ====================
             with col_slide:
-                # Hiển thị Slide hiện tại
                 total_slides = len(st.session_state.prs.slides)
                 current_idx = st.session_state.slide_idx
                 current_slide = st.session_state.prs.slides[current_idx]
-                
-                st.markdown(f"#### Slide {current_idx + 1} / {total_slides}")
-                
-                # Trích xuất và hiển thị nội dung thực của Slide
+    
+                st.markdown(f"#### Slide **{current_idx + 1} / {total_slides}**")
+    
+                # === THÔNG BÁO SWIPE LÂU HƠN (4 giây) ===
+                current_time = time.time()
+                if (st.session_state.last_swipe and 
+                    current_time - st.session_state.swipe_timestamp < 4.0):
+                    
+                    if "Right" in st.session_state.last_swipe:
+                        st.success("👉 **SWIPE RIGHT** - Chuyển sang slide tiếp theo!", icon="➡️")
+                    else:
+                        st.success("👈 **SWIPE LEFT** - Quay về slide trước!", icon="⬅️")
+    
+                # Hiển thị slide với giao diện đẹp hơn
                 slide_text = get_slide_content(current_slide)
                 
                 st.markdown(f"""
-                <div style="background-color: #f0f2f6; padding: 40px; border-radius: 15px; border: 2px solid #d1d5db; min-height: 400px; color: #1f2937;">
-                    <div style="white-space: pre-wrap; font-size: 1.2em; line-height: 1.6;">
+                <div style="
+                    background-color: #ffffff; 
+                    padding: 50px 40px; 
+                    border-radius: 20px; 
+                    border: 3px solid #1f2937; 
+                    min-height: 520px; 
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    color: #1f2937;
+                    font-family: 'Segoe UI', sans-serif;
+                ">
+                    <div style="white-space: pre-wrap; font-size: 1.35em; line-height: 1.7;">
                         {slide_text}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+    
                 st.progress((current_idx + 1) / total_slides)
 
 elif page == "Đánh giá hệ thống":
