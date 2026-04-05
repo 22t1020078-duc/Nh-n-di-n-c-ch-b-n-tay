@@ -85,64 +85,43 @@ def detect_gesture_heuristic(hand_landmarks, prev_x=None):
 
 # --- WebRTC Processor ---
 class VideoProcessor(VideoProcessorBase):
-        def __init__(self):
-            self.hands = get_mediapipe_hands()
-            self.result_queue = queue.Queue()
-            self.x_history = deque(maxlen=10)      # === CẢI THIỆN SWIPE ===
-            self.last_gesture_time = 0
+    def __init__(self):
+        self.hands = get_mediapipe_hands()
+        self.result_queue = queue.Queue()
+        self.prev_x = None
+        self.last_gesture_time = 0
+        self.last_gesture = "None"          # === FIX: debug gesture ===
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1)
+        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb_img)
+
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                
+                gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
+                self.prev_x = curr_x
+                self.last_gesture = gesture   # === FIX: lưu gesture ===
+
+                color = (0, 255, 0)
+                if "Swipe" in gesture:
+                    color = (0, 165, 255)
+                cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+
+                # Swipe chỉ gửi queue khi đủ cooldown
+                curr_time = time.time()
+                if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
+                    self.result_queue.put(gesture)
+                    self.last_gesture_time = curr_time
+        else:
+            self.prev_x = None
             self.last_gesture = "None"
-            self.current_diff = 0.0                # Debug để bạn xem giá trị thay đổi X
-    
-        def recv(self, frame):
-            img = frame.to_ndarray(format="bgr24")
-            img = cv2.flip(img, 1)
-            rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            results = self.hands.process(rgb_img)
-    
-            gesture = "None"
-    
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-    
-                    curr_x = hand_landmarks.landmark[9].x   # Palm center
-                    self.x_history.append(curr_x)
-    
-                    # === CẢI THIỆN SWIPE: dùng delta qua 10 frame ===
-                    if len(self.x_history) >= 4:
-                        diff = self.x_history[-1] - self.x_history[0]
-                        self.current_diff = diff
-    
-                        if diff > 0.09:          # Ngưỡng đã tune tối ưu
-                            gesture = "Swipe Right"
-                            self.x_history.clear()   # Reset để tránh lặp
-                        elif diff < -0.09:
-                            gesture = "Swipe Left"
-                            self.x_history.clear()
-    
-                    # Nếu không phải swipe thì giữ logic cũ (Click, Laser, Fist...)
-                    if gesture == "None":
-                        gesture, _ = detect_gesture_heuristic(hand_landmarks)  # giữ nguyên hàm cũ
-    
-                    self.last_gesture = gesture
-    
-                    # Vẽ nhãn
-                    color = (0, 255, 0) if "Swipe" not in gesture else (0, 165, 255)
-                    cv2.putText(img, f"{gesture} (diff:{self.current_diff:.3f})", 
-                               (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-    
-                    # Gửi queue chỉ khi swipe + cooldown
-                    curr_time = time.time()
-                    if "Swipe" in gesture and (curr_time - self.last_gesture_time > 1.0):
-                        self.result_queue.put(gesture)
-                        self.last_gesture_time = curr_time
-            else:
-                self.x_history.clear()
-                self.last_gesture = "None"
-                self.current_diff = 0.0
-    
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
-            
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 # --- Helper for Slide Content ---
 def get_slide_content(slide):
     lines = []
@@ -205,16 +184,16 @@ elif page == "Triển khai mô hình":
                 st.info("Chuyển sang tab 'Chế độ trình chiếu' để bắt đầu.")
 
     with tab_present:
-        # === KHỞI TẠO STATE Ở ĐÂY ĐỂ TRÁNH LỖI ===
-        if 'slide_idx' not in st.session_state:
-            st.session_state.slide_idx = 0
-        if 'last_swipe' not in st.session_state:
-            st.session_state.last_swipe = None
-            st.session_state.swipe_timestamp = 0
-    
         if 'prs' not in st.session_state:
             st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
         else:
+            # Khởi tạo session_state
+            if 'slide_idx' not in st.session_state:
+                st.session_state.slide_idx = 0
+            if 'last_swipe' not in st.session_state:
+                st.session_state.last_swipe = None
+                st.session_state.swipe_timestamp = 0
+    
             st.markdown("### 📺 Đang trình chiếu...")
     
             col_cam, col_slide = st.columns([1, 3])
@@ -231,12 +210,12 @@ elif page == "Triển khai mô hình":
                 )
                 st.caption("Vuốt TRÁI ← để về trước | Vuốt PHẢI → để sang sau")
     
-                # Truy cập processor an toàn
+                # === FIX LỖI SESSION_STATE + an toàn truy cập processor ===
                 processor = getattr(webrtc_ctx, 'video_processor', None)
                 if processor is not None:
                     st.caption(f"**Gesture hiện tại:** {processor.last_gesture}")
-                    st.caption(f"**Delta X (debug):** {processor.current_diff:.3f}")   # ← giúp bạn xem swipe có detect không
     
+                    # Xử lý swipe từ queue
                     try:
                         gesture = processor.result_queue.get_nowait()
                         if "Swipe Right" in gesture:
@@ -266,7 +245,7 @@ elif page == "Triển khai mô hình":
                     st.session_state.slide_idx = 0
                     st.rerun()
     
-            # ==================== PHẦN SLIDE (đầy đủ nội dung + đẹp) ====================
+            # ==================== PHẦN SLIDE (đã fix trắng + đẹp hơn) ====================
             with col_slide:
                 total_slides = len(st.session_state.prs.slides)
                 current_idx = st.session_state.slide_idx
@@ -274,13 +253,15 @@ elif page == "Triển khai mô hình":
     
                 st.markdown(f"#### Slide **{current_idx + 1} / {total_slides}**")
     
-                # Thông báo swipe giữ 4 giây
+                # Thông báo Swipe giữ 4 giây (dễ check)
                 current_time = time.time()
                 if st.session_state.last_swipe and current_time - st.session_state.swipe_timestamp < 4.0:
-                    icon = "➡️" if "Right" in st.session_state.last_swipe else "⬅️"
-                    st.success(f"{icon} **{st.session_state.last_swipe.upper()}** - Slide đã chuyển!", icon=icon)
+                    if "Right" in st.session_state.last_swipe:
+                        st.success("👉 **SWIPE RIGHT** - Chuyển slide tiếp theo!", icon="➡️")
+                    else:
+                        st.success("👈 **SWIPE LEFT** - Quay về slide trước!", icon="⬅️")
     
-                # Nội dung slide (đầy đủ + scroll nếu dài)
+                # Nội dung slide (đã cải tiến hiển thị)
                 slide_text = get_slide_content(current_slide)
                 
                 st.markdown(f"""
@@ -289,21 +270,23 @@ elif page == "Triển khai mô hình":
                     padding: 60px 50px;
                     border-radius: 24px;
                     border: 4px solid #1f2937;
-                    min-height: 580px;
-                    max-height: 620px;
-                    overflow-y: auto;
-                    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+                    min-height: 560px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
                     color: #1f2937;
                     font-family: 'Segoe UI', system-ui, sans-serif;
                 ">
-                    <div style="white-space: pre-wrap; font-size: 1.5em; line-height: 1.8;">
+                    <div style="
+                        white-space: pre-wrap;
+                        font-size: 1.45em;
+                        line-height: 1.75;
+                        text-align: left;
+                    ">
                         {slide_text}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
     
                 st.progress((current_idx + 1) / total_slides)
-                
 elif page == "Đánh giá hệ thống":
     st.title("📈 Đánh giá hệ thống")
     st.metric("Accuracy", "95%", "+2%")
