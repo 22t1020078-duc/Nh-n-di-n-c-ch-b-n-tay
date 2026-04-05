@@ -49,37 +49,58 @@ def calculate_distance(p1, p2):
     return np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2 + (p1.z - p2.z)**2)
 
 def detect_gesture_heuristic(hand_landmarks, prev_x=None):
-    thumb_tip = hand_landmarks.landmark[4]
-    index_tip = hand_landmarks.landmark[8]
-    middle_tip = hand_landmarks.landmark[12]
-    index_mcp = hand_landmarks.landmark[5]
-    middle_mcp = hand_landmarks.landmark[9]
+    """
+    Cải tiến logic Heuristic: Sử dụng nhiều điểm mốc và chuẩn hóa theo kích thước bàn tay.
+    """
+    # Các điểm mốc quan trọng
+    # Ngón cái: 4(Tip), 2(Base)
+    # Ngón trỏ: 8(Tip), 6(PIP), 5(MCP)
+    # Ngón giữa: 12(Tip), 10(PIP), 9(MCP)
+    # Ngón nhẫn: 16(Tip), 14(PIP)
+    # Ngón út: 20(Tip), 18(PIP)
     
-    # Tọa độ X trung tâm bàn tay (dùng landmark 9 - Middle Finger MCP)
-    curr_x = hand_landmarks.landmark[9].x
+    landmarks = hand_landmarks.landmark
     
-    dist_thumb_index = calculate_distance(thumb_tip, index_tip)
-    is_index_ext = index_tip.y < index_mcp.y
-    is_middle_folded = middle_tip.y > middle_mcp.y
+    # 1. Tính toán "đơn vị bàn tay" để chuẩn hóa khoảng cách (khoảng cách từ cổ tay(0) đến gốc ngón giữa(9))
+    hand_size = calculate_distance(landmarks[0], landmarks[9])
     
+    # 2. Xác định trạng thái duỗi của các ngón (Tip nằm trên PIP)
+    # Lưu ý: Y giảm khi đi lên trên màn hình
+    is_index_up = landmarks[8].y < landmarks[6].y
+    is_middle_up = landmarks[12].y < landmarks[10].y
+    is_ring_up = landmarks[16].y < landmarks[14].y
+    is_pinky_up = landmarks[20].y < landmarks[18].y
+    
+    # 3. Tính khoảng cách Thumb - Index (chuẩn hóa)
+    dist_thumb_index = calculate_distance(landmarks[4], landmarks[8]) / hand_size
+    
+    curr_x = landmarks[9].x
     gesture = "None"
     
-    # Kiểm tra vuốt (Swipe) dựa trên sự thay đổi tọa độ X
+    # --- Kiểm tra Vuốt (Swipe) ưu tiên hàng đầu ---
     if prev_x is not None:
         diff = curr_x - prev_x
-        if diff > 0.15: # Ngưỡng vuốt phải
+        if diff > 0.12: # Giảm ngưỡng vuốt để nhạy hơn
             gesture = "Swipe Right"
-        elif diff < -0.15: # Ngưỡng vuốt trái
+        elif diff < -0.12:
             gesture = "Swipe Left"
     
+    # --- Nếu không vuốt, kiểm tra các cử chỉ tĩnh ---
     if gesture == "None":
-        if dist_thumb_index < 0.05:
+        # Click: Ngón cái và ngón trỏ chạm nhau (ngưỡng 0.4 sau khi chia hand_size)
+        if dist_thumb_index < 0.4:
             gesture = "Click"
-        elif is_index_ext and is_middle_folded:
+        
+        # Laser Pointer: Chỉ ngón trỏ duỗi, các ngón khác gập
+        elif is_index_up and not is_middle_up and not is_ring_up:
             gesture = "Laser Pointer"
-        elif not is_index_ext and is_middle_folded:
+            
+        # Fist (Nắm tay): Tất cả các ngón chính đều gập
+        elif not is_index_up and not is_middle_up and not is_ring_up:
             gesture = "Fist (Nắm tay)"
-        else:
+            
+        # Open Hand: Tất cả các ngón đều duỗi
+        elif is_index_up and is_middle_up and is_ring_up:
             gesture = "Open Hand"
             
     return gesture, curr_x
