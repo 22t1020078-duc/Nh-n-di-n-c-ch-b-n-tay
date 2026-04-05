@@ -41,13 +41,16 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- MediaPipe Setup ---
+@st.cache_resource
+def get_mediapipe_hands():
+    return mp.solutions.hands.Hands(
+        static_image_mode=False,
+        max_num_hands=1,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.5
+    )
+
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(
-    static_image_mode=False,
-    max_num_hands=1,
-    min_detection_confidence=0.7,
-    min_tracking_confidence=0.5
-)
 mp_draw = mp.solutions.drawing_utils
 
 # --- Sidebar ---
@@ -73,12 +76,8 @@ with st.sidebar:
 # --- WebRTC Processor ---
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
-        self.hands = mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.7,
-            min_tracking_confidence=0.5
-        )
+        # Use the cached model to save memory and initialization time
+        self.hands = get_mediapipe_hands()
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -131,23 +130,17 @@ elif page == "Triển khai mô hình":
     col_left, col_right = st.columns([1, 1.5])
     
     with col_left:
-        st.subheader("⚙️ Cấu hình & Tải mô hình")
+        st.subheader("⚙️ Cấu hình hệ thống")
         
         with st.container(border=True):
-            model_type = st.selectbox(
-                "Chọn loại mô hình",
-                ["MediaPipe + Heuristic Logic", "Random Forest (.pkl)", "Deep Learning (.h5)", "PyTorch (.pth)"],
-                help="Chọn kiến trúc mô hình bạn đã huấn luyện."
-            )
+            st.info("Hệ thống hiện đang sử dụng mô hình **MediaPipe Hand Landmarker** tối ưu cho môi trường Web.")
             
-            uploaded_model = st.file_uploader(
-                "Tải file mô hình tùy chỉnh", 
-                type=["h5", "pkl", "pth"],
-                help="Tải lên file trọng số mô hình của bạn."
-            )
-            
-            if uploaded_model:
-                st.success(f"✅ Đã nhận file: {uploaded_model.name}")
+            model_info = {
+                "Kiến trúc": "MediaPipe Hands",
+                "Độ trễ": "~25ms",
+                "Tài nguyên": "Thấp (CPU Optimized)"
+            }
+            st.json(model_info)
         
         st.divider()
         st.subheader("🧪 Kiểm thử thủ công (Manual Test)")
@@ -196,6 +189,14 @@ elif page == "Triển khai mô hình":
             rtc_configuration=RTCConfiguration(
                 {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
             ),
+            media_stream_constraints={
+                "video": {
+                    "width": {"ideal": 640},
+                    "height": {"ideal": 480},
+                    "frameRate": {"ideal": 15}
+                },
+                "audio": False
+            },
             video_processor_factory=VideoProcessor,
             async_processing=True,
         )
