@@ -84,110 +84,47 @@ def detect_gesture_heuristic(hand_landmarks, prev_x=None):
     return gesture, curr_x
 
 # --- WebRTC Processor ---
-class VideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.hands = get_mediapipe_hands()
-        self.result_queue = queue.Queue()
-        self.prev_x = None
-        self.last_gesture_time = 0
-        self.last_gesture = "None"          # === FIX: debug gesture ===
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        img = cv2.flip(img, 1)
-        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(rgb_img)
-
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                
-                gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
-                self.prev_x = curr_x
-                self.last_gesture = gesture   # === FIX: lưu gesture ===
-
-                color = (0, 255, 0)
-                if "Swipe" in gesture:
-                    color = (0, 165, 255)
-                cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-
-                # Swipe chỉ gửi queue khi đủ cooldown
-                curr_time = time.time()
-                if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
-                    self.result_queue.put(gesture)
-                    self.last_gesture_time = curr_time
-        else:
+    class VideoProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.hands = get_mediapipe_hands()
+            self.result_queue = queue.Queue()
             self.prev_x = None
-            self.last_gesture = "None"
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+            self.last_gesture_time = 0
+            self.last_gesture = "None"          # ← thêm dòng này
+    
+        def recv(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
+            rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = self.hands.process(rgb_img)
+    
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                    gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
+                    self.prev_x = curr_x
+                    self.last_gesture = gesture                # ← thêm dòng này
+                    
+                    color = (0, 255, 0)
+                    if "Swipe" in gesture:
+                        color = (0, 165, 255)
+                    cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+    
+                    curr_time = time.time()
+                    if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
+                        self.result_queue.put(gesture)
+                        self.last_gesture_time = curr_time
+            else:
+                self.prev_x = None
+                self.last_gesture = "None"
+            
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # --- Helper for Slide Content ---
-def get_slide_content(slide):
-    lines = []
-    
-    # Lấy tiêu đề slide (nếu có)
-    if slide.shapes.title and slide.shapes.title.text.strip():
-        lines.append(f"**{slide.shapes.title.text.strip()}**")
-    
-    # Lấy tất cả text còn lại (bao gồm bullet, text box, placeholder...)
-    for shape in slide.shapes:
-        if shape.has_text_frame and shape != slide.shapes.title:
-            text = shape.text.strip()
-            if text:
-                lines.append(text)
-    
-    return "\n\n".join(lines) if lines else "Slide này không có nội dung văn bản."
-
-# --- Sidebar ---
-with st.sidebar:
-    st.markdown("# ⚡ GestureAI")
-    page = st.radio("Navigation", ["Giới thiệu & EDA", "Triển khai mô hình", "Đánh giá hệ thống"], index=1)
-    st.divider()
-    st.info("**Sinh viên:** Nguyễn Công Minh Đức\n\n**Đề tài:** Nhận diện cử chỉ bàn tay.")
-
-# --- Pages ---
-if page == "Giới thiệu & EDA":
-    st.title("📊 Giới thiệu & Khám phá dữ liệu")
-    st.write("Dự án sử dụng MediaPipe & Heuristic Logic để nhận diện cử chỉ bàn tay thời gian thực.")
-    df = pd.DataFrame({'label': ['Click', 'Laser', 'Swipe', 'Noise'], 'count': [1200, 1500, 800, 2000]})
-    st.bar_chart(df.set_index('label'))
-
-elif page == "Triển khai mô hình":
-    st.title("🚀 Triển khai & Trình chiếu")
-    
-    # Khởi tạo trạng thái slide trong session_state
-    if 'slide_idx' not in st.session_state:
-        st.session_state.slide_idx = 0
-
-    # Tabs cho các chế độ làm việc
-    tab_setup, tab_present = st.tabs(["🛠️ Thiết lập", "📺 Chế độ trình chiếu"])
-
-    with tab_setup:
-        col_l, col_r = st.columns([1, 1.5])
-        with col_l:
-            st.subheader("📹 Phân tích Video")
-            up_vid = st.file_uploader("Tải video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
-            if up_vid:
-                st.video(up_vid)
-                if st.button("Phân tích Video", type="primary"):
-                    st.success("Phân tích hoàn tất!")
-
-        with col_r:
-            st.subheader("📂 Quản lý Slide")
-            ppt_file = st.file_uploader("Tải file PPTX", type=["pptx"])
-            if ppt_file:
-                # === FIX 1: Dùng BytesIO ===
-                prs_bytes = io.BytesIO(ppt_file.read())
-                st.session_state.prs = Presentation(prs_bytes)
-                st.success(f"✅ Đã tải: {ppt_file.name} ({len(st.session_state.prs.slides)} slides)")
-                st.info("Chuyển sang tab 'Chế độ trình chiếu' để bắt đầu.")
-
     with tab_present:
         if 'prs' not in st.session_state:
             st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
         else:
-            # Khởi tạo session_state
             if 'slide_idx' not in st.session_state:
                 st.session_state.slide_idx = 0
             if 'last_swipe' not in st.session_state:
@@ -210,28 +147,27 @@ elif page == "Triển khai mô hình":
                 )
                 st.caption("Vuốt TRÁI ← để về trước | Vuốt PHẢI → để sang sau")
     
-                # === FIX LỖI SESSION_STATE + an toàn truy cập processor ===
                 processor = getattr(webrtc_ctx, 'video_processor', None)
                 if processor is not None:
                     st.caption(f"**Gesture hiện tại:** {processor.last_gesture}")
     
-                    # Xử lý swipe từ queue
+                    # === FIX CHUYỂN SLIDE (drain hết queue) ===
                     try:
-                        gesture = processor.result_queue.get_nowait()
-                        if "Swipe Right" in gesture:
-                            st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
-                            st.session_state.last_swipe = "Swipe Right"
-                            st.session_state.swipe_timestamp = time.time()
-                            st.rerun()
-                        elif "Swipe Left" in gesture:
-                            st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
-                            st.session_state.last_swipe = "Swipe Left"
-                            st.session_state.swipe_timestamp = time.time()
-                            st.rerun()
+                        while True:                                   # ← quan trọng
+                            gesture = processor.result_queue.get_nowait()
+                            if "Swipe Right" in gesture:
+                                st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                                st.session_state.last_swipe = "Swipe Right"
+                                st.session_state.swipe_timestamp = time.time()
+                                st.rerun()
+                            elif "Swipe Left" in gesture:
+                                st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                                st.session_state.last_swipe = "Swipe Left"
+                                st.session_state.swipe_timestamp = time.time()
+                                st.rerun()
                     except queue.Empty:
                         pass
     
-                # Nút thủ công
                 st.divider()
                 c1, c2 = st.columns(2)
                 if c1.button("⬅️ Trước", use_container_width=True):
@@ -245,7 +181,7 @@ elif page == "Triển khai mô hình":
                     st.session_state.slide_idx = 0
                     st.rerun()
     
-            # ==================== PHẦN SLIDE (đã fix trắng + đẹp hơn) ====================
+            # ==================== SLIDE HIỂN THỊ (đầy đủ + đẹp) ====================
             with col_slide:
                 total_slides = len(st.session_state.prs.slides)
                 current_idx = st.session_state.slide_idx
@@ -253,36 +189,29 @@ elif page == "Triển khai mô hình":
     
                 st.markdown(f"#### Slide **{current_idx + 1} / {total_slides}**")
     
-                # Thông báo Swipe giữ 4 giây (dễ check)
+                # Thông báo swipe giữ 4 giây
                 current_time = time.time()
                 if st.session_state.last_swipe and current_time - st.session_state.swipe_timestamp < 4.0:
-                    if "Right" in st.session_state.last_swipe:
-                        st.success("👉 **SWIPE RIGHT** - Chuyển slide tiếp theo!", icon="➡️")
-                    else:
-                        st.success("👈 **SWIPE LEFT** - Quay về slide trước!", icon="⬅️")
+                    icon = "➡️" if "Right" in st.session_state.last_swipe else "⬅️"
+                    st.success(f"{icon} **{st.session_state.last_swipe.upper()}** - Slide đã chuyển!", icon=icon)
     
-                # Nội dung slide (đã cải tiến hiển thị)
                 slide_text = get_slide_content(current_slide)
                 
                 st.markdown(f"""
                 <div style="
                     background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
-                    padding: 60px 50px;
-                    border-radius: 24px;
+                    padding: 50px 40px;
+                    border-radius: 20px;
                     border: 4px solid #1f2937;
                     min-height: 560px;
-                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+                    max-height: 650px;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
                     color: #1f2937;
-                    font-family: 'Segoe UI', system-ui, sans-serif;
+                    font-size: 1.45em;
+                    line-height: 1.75;
                 ">
-                    <div style="
-                        white-space: pre-wrap;
-                        font-size: 1.45em;
-                        line-height: 1.75;
-                        text-align: left;
-                    ">
-                        {slide_text}
-                    </div>
+                    {slide_text}
                 </div>
                 """, unsafe_allow_html=True)
     
