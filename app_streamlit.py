@@ -187,7 +187,9 @@ elif page == "Triển khai mô hình":
         if 'prs' not in st.session_state:
             st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
         else:
-            # Khởi tạo session_state cho thông báo swipe
+            # Khởi tạo session_state
+            if 'slide_idx' not in st.session_state:
+                st.session_state.slide_idx = 0
             if 'last_swipe' not in st.session_state:
                 st.session_state.last_swipe = None
                 st.session_state.swipe_timestamp = 0
@@ -208,13 +210,14 @@ elif page == "Triển khai mô hình":
                 )
                 st.caption("Vuốt TRÁI ← để về trước | Vuốt PHẢI → để sang sau")
     
-                # Hiển thị gesture realtime (để bạn check dễ dàng)
-                if webrtc_ctx.video_processor:
-                    st.caption(f"**Gesture hiện tại:** {webrtc_ctx.video_processor.last_gesture}")
+                # === FIX LỖI SESSION_STATE + an toàn truy cập processor ===
+                processor = getattr(webrtc_ctx, 'video_processor', None)
+                if processor is not None:
+                    st.caption(f"**Gesture hiện tại:** {processor.last_gesture}")
     
                     # Xử lý swipe từ queue
                     try:
-                        gesture = webrtc_ctx.video_processor.result_queue.get_nowait()
+                        gesture = processor.result_queue.get_nowait()
                         if "Swipe Right" in gesture:
                             st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
                             st.session_state.last_swipe = "Swipe Right"
@@ -228,21 +231,21 @@ elif page == "Triển khai mô hình":
                     except queue.Empty:
                         pass
     
-                # Nút điều khiển thủ công
+                # Nút thủ công
                 st.divider()
                 c1, c2 = st.columns(2)
-                if c1.button("⬅️ Trước"):
+                if c1.button("⬅️ Trước", use_container_width=True):
                     st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
                     st.rerun()
-                if c2.button("Sau ➡️"):
+                if c2.button("Sau ➡️", use_container_width=True):
                     st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
                     st.rerun()
     
-                if st.button("Reset Slide", type="secondary"):
+                if st.button("Reset Slide", type="secondary", use_container_width=True):
                     st.session_state.slide_idx = 0
                     st.rerun()
     
-            # ==================== PHẦN HIỂN THỊ SLIDE (đã sửa đẹp hơn) ====================
+            # ==================== PHẦN SLIDE (đã fix trắng + đẹp hơn) ====================
             with col_slide:
                 total_slides = len(st.session_state.prs.slides)
                 current_idx = st.session_state.slide_idx
@@ -250,38 +253,40 @@ elif page == "Triển khai mô hình":
     
                 st.markdown(f"#### Slide **{current_idx + 1} / {total_slides}**")
     
-                # === THÔNG BÁO SWIPE LÂU HƠN (4 giây) ===
+                # Thông báo Swipe giữ 4 giây (dễ check)
                 current_time = time.time()
-                if (st.session_state.last_swipe and 
-                    current_time - st.session_state.swipe_timestamp < 4.0):
-                    
+                if st.session_state.last_swipe and current_time - st.session_state.swipe_timestamp < 4.0:
                     if "Right" in st.session_state.last_swipe:
-                        st.success("👉 **SWIPE RIGHT** - Chuyển sang slide tiếp theo!", icon="➡️")
+                        st.success("👉 **SWIPE RIGHT** - Chuyển slide tiếp theo!", icon="➡️")
                     else:
                         st.success("👈 **SWIPE LEFT** - Quay về slide trước!", icon="⬅️")
     
-                # Hiển thị slide với giao diện đẹp hơn
+                # Nội dung slide (đã cải tiến hiển thị)
                 slide_text = get_slide_content(current_slide)
                 
                 st.markdown(f"""
                 <div style="
-                    background-color: #ffffff; 
-                    padding: 50px 40px; 
-                    border-radius: 20px; 
-                    border: 3px solid #1f2937; 
-                    min-height: 520px; 
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+                    padding: 60px 50px;
+                    border-radius: 24px;
+                    border: 4px solid #1f2937;
+                    min-height: 560px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
                     color: #1f2937;
-                    font-family: 'Segoe UI', sans-serif;
+                    font-family: 'Segoe UI', system-ui, sans-serif;
                 ">
-                    <div style="white-space: pre-wrap; font-size: 1.35em; line-height: 1.7;">
+                    <div style="
+                        white-space: pre-wrap;
+                        font-size: 1.45em;
+                        line-height: 1.75;
+                        text-align: left;
+                    ">
                         {slide_text}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
     
                 st.progress((current_idx + 1) / total_slides)
-
 elif page == "Đánh giá hệ thống":
     st.title("📈 Đánh giá hệ thống")
     st.metric("Accuracy", "95%", "+2%")
