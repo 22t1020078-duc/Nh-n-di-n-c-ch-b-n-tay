@@ -85,43 +85,64 @@ def detect_gesture_heuristic(hand_landmarks, prev_x=None):
 
 # --- WebRTC Processor ---
 class VideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.hands = get_mediapipe_hands()
-        self.result_queue = queue.Queue()
-        self.prev_x = None
-        self.last_gesture_time = 0
-        self.last_gesture = "None"          # === FIX: debug gesture ===
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        img = cv2.flip(img, 1)
-        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(rgb_img)
-
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                
-                gesture, curr_x = detect_gesture_heuristic(hand_landmarks, self.prev_x)
-                self.prev_x = curr_x
-                self.last_gesture = gesture   # === FIX: lưu gesture ===
-
-                color = (0, 255, 0)
-                if "Swipe" in gesture:
-                    color = (0, 165, 255)
-                cv2.putText(img, gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-
-                # Swipe chỉ gửi queue khi đủ cooldown
-                curr_time = time.time()
-                if ("Swipe" in gesture) and (curr_time - self.last_gesture_time > 1.0):
-                    self.result_queue.put(gesture)
-                    self.last_gesture_time = curr_time
-        else:
-            self.prev_x = None
+        def __init__(self):
+            self.hands = get_mediapipe_hands()
+            self.result_queue = queue.Queue()
+            self.x_history = deque(maxlen=10)      # === CẢI THIỆN SWIPE ===
+            self.last_gesture_time = 0
             self.last_gesture = "None"
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
+            self.current_diff = 0.0                # Debug để bạn xem giá trị thay đổi X
+    
+        def recv(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
+            rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = self.hands.process(rgb_img)
+    
+            gesture = "None"
+    
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    
+                    curr_x = hand_landmarks.landmark[9].x   # Palm center
+                    self.x_history.append(curr_x)
+    
+                    # === CẢI THIỆN SWIPE: dùng delta qua 10 frame ===
+                    if len(self.x_history) >= 4:
+                        diff = self.x_history[-1] - self.x_history[0]
+                        self.current_diff = diff
+    
+                        if diff > 0.09:          # Ngưỡng đã tune tối ưu
+                            gesture = "Swipe Right"
+                            self.x_history.clear()   # Reset để tránh lặp
+                        elif diff < -0.09:
+                            gesture = "Swipe Left"
+                            self.x_history.clear()
+    
+                    # Nếu không phải swipe thì giữ logic cũ (Click, Laser, Fist...)
+                    if gesture == "None":
+                        gesture, _ = detect_gesture_heuristic(hand_landmarks)  # giữ nguyên hàm cũ
+    
+                    self.last_gesture = gesture
+    
+                    # Vẽ nhãn
+                    color = (0, 255, 0) if "Swipe" not in gesture else (0, 165, 255)
+                    cv2.putText(img, f"{gesture} (diff:{self.current_diff:.3f})", 
+                               (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+    
+                    # Gửi queue chỉ khi swipe + cooldown
+                    curr_time = time.time()
+                    if "Swipe" in gesture and (curr_time - self.last_gesture_time > 1.0):
+                        self.result_queue.put(gesture)
+                        self.last_gesture_time = curr_time
+            else:
+                self.x_history.clear()
+                self.last_gesture = "None"
+                self.current_diff = 0.0
+    
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+            
 # --- Helper for Slide Content ---
 def get_slide_content(slide):
     lines = []
