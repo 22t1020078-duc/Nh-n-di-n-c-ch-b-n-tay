@@ -309,6 +309,14 @@ const DemoPage = () => {
   const presentationVideoRef = useRef<HTMLVideoElement>(null);
   const presentationCanvasRef = useRef<HTMLCanvasElement>(null);
   
+  const [liveFeatures, setLiveFeatures] = useState({
+    thumb_index_dist: 0,
+    index_up: 0,
+    middle_up: 0,
+    ring_up: 0,
+    pinky_up: 0
+  });
+  
   const [tracker, setTracker] = useState<HandTracker | null>(null);
   const [gesture, setGesture] = useState<GestureType>('None');
   const [confidence, setConfidence] = useState(0);
@@ -439,9 +447,10 @@ const DemoPage = () => {
   useEffect(() => {
     const t = new HandTracker();
     t.setCallback((results) => {
-      const { gesture: g, confidence: c } = detectGesture(results);
+      const { gesture: g, confidence: c, features } = detectGesture(results);
       setGesture(g);
       setConfidence(c);
+      if (features) setLiveFeatures(features);
       
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const indexTip = results.multiHandLandmarks[0][8];
@@ -480,7 +489,7 @@ const DemoPage = () => {
       const activeCanvas = isPresentationModeRef.current ? presentationCanvasRef.current : canvasRef.current;
       if (activeCanvas) {
         const ctx = activeCanvas.getContext('2d');
-        if (ctx) t.draw(ctx, results);
+        if (ctx) t.draw(ctx, results, g);
       }
 
       const now = performance.now();
@@ -656,7 +665,7 @@ const DemoPage = () => {
                 ref={canvasRef}
                 width={640}
                 height={480}
-                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-90"
               />
               
               <div className="absolute top-6 left-6 flex gap-3">
@@ -729,6 +738,45 @@ const DemoPage = () => {
                 Mô hình đang sử dụng: <span className="font-bold text-blue-600">{modelType}</span>
               </p>
             </section>
+          </div>
+
+          {/* Live Feature Data (Streamlit-like Dataframe) */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl">
+            <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
+              Dữ liệu đặc trưng thời gian thực (st.dataframe)
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 px-4 text-slate-400 font-bold uppercase text-[10px]">Đặc trưng</th>
+                    <th className="py-3 px-4 text-slate-400 font-bold uppercase text-[10px]">Giá trị hiện tại</th>
+                    <th className="py-3 px-4 text-slate-400 font-bold uppercase text-[10px]">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="py-3 px-4 font-medium text-slate-600">Thumb-Index Distance</td>
+                    <td className="py-3 px-4 font-mono text-blue-600">{liveFeatures.thumb_index_dist.toFixed(4)}</td>
+                    <td className="py-3 px-4">
+                      <div className={cn("h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden")}>
+                        <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, liveFeatures.thumb_index_dist * 500)}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                  {['index_up', 'middle_up', 'ring_up', 'pinky_up'].map((key) => (
+                    <tr key={key} className="border-t border-slate-50">
+                      <td className="py-3 px-4 font-medium text-slate-600 capitalize">{key.replace('_', ' ')}</td>
+                      <td className="py-3 px-4 font-mono text-slate-600">{liveFeatures[key as keyof typeof liveFeatures]}</td>
+                      <td className="py-3 px-4">
+                        <div className={cn("w-3 h-3 rounded-full", liveFeatures[key as keyof typeof liveFeatures] ? "bg-green-500" : "bg-slate-200")} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* PPT Upload Section */}
@@ -818,7 +866,7 @@ const DemoPage = () => {
               {/* Floating Camera Overlay */}
               <div className="absolute bottom-4 right-4 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-50">
                 <video ref={presentationVideoRef} className="w-full h-full object-cover scale-x-[-1]" autoPlay playsInline />
-                <canvas ref={presentationCanvasRef} className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60" />
+                <canvas ref={presentationCanvasRef} className="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-90" />
               </div>
             </div>
           </motion.div>

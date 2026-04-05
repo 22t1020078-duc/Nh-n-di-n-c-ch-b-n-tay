@@ -73,21 +73,74 @@ with st.sidebar:
     **Đề tài:** Nhận diện cử chỉ bàn tay hỗ trợ thuyết trình.
     """)
 
+# --- Gesture Logic ---
+def detect_gesture(hand_landmarks):
+    # Landmarks: 0: Wrist, 4: Thumb Tip, 8: Index Tip, 12: Middle Tip, 16: Ring Tip, 20: Pinky Tip
+    # 5, 6, 7: Index MCP, PIP, DIP
+    # 9, 10, 11: Middle MCP, PIP, DIP
+    # 13, 14, 15: Ring MCP, PIP, DIP
+    # 17, 18, 19: Pinky MCP, PIP, DIP
+    
+    lm = hand_landmarks.landmark
+    
+    def is_finger_up(tip, pip, mcp):
+        return lm[tip].y < lm[pip].y and lm[pip].y < lm[mcp].y
+
+    index_up = is_finger_up(8, 6, 5)
+    middle_up = is_finger_up(12, 10, 9)
+    ring_up = is_finger_up(16, 14, 13)
+    pinky_up = is_finger_up(20, 18, 17)
+    
+    # Thumb-Index distance
+    dist_thumb_index = np.sqrt((lm[4].x - lm[8].x)**2 + (lm[4].y - lm[8].y)**2)
+    
+    gesture = "None"
+    confidence = 0.5
+    
+    # Logic matching gestureLogic.ts
+    if index_up and not middle_up and not ring_up and not pinky_up:
+        if dist_thumb_index < 0.04:
+            gesture = "Click"
+            confidence = 0.98
+        else:
+            gesture = "Laser"
+            confidence = 0.95
+    elif index_up and middle_up and ring_up and pinky_up:
+        gesture = "Swipe" # Simplified for Python version
+        confidence = 0.85
+        
+    return gesture, confidence
+
 # --- WebRTC Processor ---
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
-        # Use the cached model to save memory and initialization time
         self.hands = get_mediapipe_hands()
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         img = cv2.flip(img, 1)
+        h, w, _ = img.shape
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_img)
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                # Draw skeleton
                 mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                
+                # Detect gesture
+                gesture, conf = detect_gesture(hand_landmarks)
+                
+                if gesture != "None":
+                    # Draw text
+                    wrist = hand_landmarks.landmark[0]
+                    # Since we flipped the image, we need to handle coordinates if necessary
+                    # But mp_draw handles it. For manual text:
+                    x = int(wrist.x * w)
+                    y = int(wrist.y * h)
+                    
+                    cv2.putText(img, f"{gesture} ({int(conf*100)}%)", (x, y - 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
