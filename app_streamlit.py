@@ -99,30 +99,78 @@ if page == "Giới thiệu & EDA":
     st.bar_chart(df.set_index('label'))
 
 elif page == "Triển khai mô hình":
-    st.title("🚀 Triển khai & Kiểm thử")
-    col_l, col_r = st.columns([1, 1.5])
+    st.title("🚀 Triển khai & Trình chiếu")
     
-    with col_l:
-        st.subheader("📹 Tải Video & Dự đoán")
-        up_vid = st.file_uploader("Tải video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
-        if up_vid:
-            st.video(up_vid)
-            if st.button("Phân tích Video", type="primary"):
-                st.success("Phân tích hoàn tất! Dữ liệu đã sẵn sàng để gán nhãn.")
+    # Khởi tạo trạng thái slide trong session_state
+    if 'slide_idx' not in st.session_state:
+        st.session_state.slide_idx = 0
 
-    with col_r:
-        st.subheader("📷 Nhận diện thời gian thực (WebRTC)")
-        webrtc_streamer(
-            key="hand-gesture", mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
-            media_stream_constraints={"video": {"width": 640, "height": 480, "frameRate": 15}, "audio": False},
-            video_processor_factory=VideoProcessor,
-            async_processing=True,
-        )
-        st.divider()
-        st.subheader("📂 Điều khiển Slide (PPTX)")
-        ppt_file = st.file_uploader("Tải file PPTX", type=["pptx"])
-        if ppt_file: st.success(f"Đã sẵn sàng điều khiển: {ppt_file.name}")
+    # Tabs cho các chế độ làm việc
+    tab_setup, tab_present = st.tabs(["🛠️ Thiết lập", "📺 Chế độ trình chiếu"])
+
+    with tab_setup:
+        col_l, col_r = st.columns([1, 1.5])
+        with col_l:
+            st.subheader("📹 Phân tích Video")
+            up_vid = st.file_uploader("Tải video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
+            if up_vid:
+                st.video(up_vid)
+                if st.button("Phân tích Video", type="primary"):
+                    st.success("Phân tích hoàn tất!")
+
+        with col_r:
+            st.subheader("📂 Quản lý Slide")
+            ppt_file = st.file_uploader("Tải file PPTX", type=["pptx"])
+            if ppt_file:
+                st.session_state.prs = Presentation(ppt_file)
+                st.success(f"Đã tải: {ppt_file.name} ({len(st.session_state.prs.slides)} slides)")
+                st.info("Chuyển sang tab 'Chế độ trình chiếu' để bắt đầu.")
+
+    with tab_present:
+        if 'prs' not in st.session_state:
+            st.warning("Vui lòng tải file PPTX ở tab 'Thiết lập' trước.")
+        else:
+            # Giao diện trình chiếu
+            st.markdown("### 📺 Đang trình chiếu...")
+            
+            col_cam, col_slide = st.columns([1, 3])
+            
+            with col_cam:
+                st.write("📷 Camera Control")
+                webrtc_streamer(
+                    key="present-gesture", mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
+                    media_stream_constraints={"video": {"width": 320, "height": 240}, "audio": False},
+                    video_processor_factory=VideoProcessor,
+                    async_processing=True,
+                )
+                st.caption("Sử dụng cử chỉ để chuyển Slide")
+                
+                # Nút điều khiển thủ công
+                st.divider()
+                c1, c2 = st.columns(2)
+                if c1.button("⬅️ Trước"):
+                    st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
+                if c2.button("Sau ➡️"):
+                    st.session_state.slide_idx = min(len(st.session_state.prs.slides) - 1, st.session_state.slide_idx + 1)
+                
+                if st.button("Reset Slide", type="secondary"):
+                    st.session_state.slide_idx = 0
+                    st.rerun()
+
+            with col_slide:
+                # Hiển thị Slide hiện tại
+                total_slides = len(st.session_state.prs.slides)
+                current_idx = st.session_state.slide_idx
+                
+                st.markdown(f"**Slide {current_idx + 1} / {total_slides}**")
+                
+                # Hiển thị ảnh slide (placeholder)
+                st.image(f"https://picsum.photos/seed/slide_{current_idx}/800/450", 
+                         use_container_width=True,
+                         caption=f"Nội dung Slide số {current_idx + 1}")
+                
+                st.progress((current_idx + 1) / total_slides)
 
 elif page == "Đánh giá hệ thống":
     st.title("📈 Đánh giá hệ thống")
